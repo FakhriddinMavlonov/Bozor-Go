@@ -38,6 +38,7 @@
       <button data-p="pr">📦 Tovarlar</button>
       <button data-p="cat">📂 Kategoriyalar</button>
       <button data-p="or">🧾 Buyurtmalar</button>
+      <button data-p="rt">⭐ Reytinglar</button>
       <button data-p="fd">🍔 Taomlar</button>
       <button data-p="tx">🚕 Taksi</button>
     </div>
@@ -122,6 +123,14 @@
     </section>
 
     <section id="p-or" class="hidden"><div class="card"><h3>🧾 Buyurtmalar</h3><div id="orList"></div></div></section>
+    <section id="p-rt" class="hidden">
+      <div class="card">
+        <h3>⭐ Tovarlar reytingi (tortilgan o'rtacha)</h3>
+        <p class="muted small">Og'irlik: 1★=0.5, 2★=1, 3★=1.5, 4★=2, 5★=2.5 · Reyting = Σ(bal×weight)/Σ(weight)</p>
+        <div id="rtProd" style="margin-top:12px"></div>
+      </div>
+      <div class="card"><h3>Barcha baholar (nazorat)</h3><div id="rtList"></div></div>
+    </section>
     <section id="p-tx" class="hidden"><div class="card"><h3>🚕 Taksi buyurtmalari</h3><div id="txList"></div></div></section>
   </main>
 </div>

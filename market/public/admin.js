@@ -25,7 +25,7 @@ function toast(msg, err = false) {
 $$("#anav button").forEach((b) =>
   b.addEventListener("click", () => {
     $$("#anav button").forEach((x) => x.classList.toggle("active", x === b));
-    ["stats", "us", "wh", "pr", "cat", "or", "fd", "tx"].forEach((p) => $("#p-" + p).classList.add("hidden"));
+    ["stats", "us", "wh", "pr", "cat", "or", "fd", "tx", "rt"].forEach((p) => $("#p-" + p).classList.add("hidden"));
     $("#p-" + b.dataset.p).classList.remove("hidden");
     load(b.dataset.p);
   })
@@ -41,6 +41,7 @@ async function load(part) {
     if (part === "or") return await loadOr();
     if (part === "fd") return await loadFd();
     if (part === "tx") return await loadTx();
+    if (part === "rt") return await loadRt();
   } catch (ex) {
     toast(ex.message, true);
     if (String(ex.message).includes("Ruxsat")) showDenied();
@@ -50,7 +51,7 @@ async function load(part) {
 function showDenied() {
   $("#denied").classList.remove("hidden");
   $("#anav").classList.add("hidden");
-  ["stats", "us", "wh", "pr", "cat", "or", "fd", "tx"].forEach((p) => $("#p-" + p).classList.add("hidden"));
+  ["stats", "us", "wh", "pr", "cat", "or", "fd", "tx", "rt"].forEach((p) => $("#p-" + p).classList.add("hidden"));
 }
 
 async function loadStats() {
@@ -196,6 +197,44 @@ async function loadTx() {
   $$("#txList [data-tst]").forEach((s) =>
     s.addEventListener("change", async () => {
       try { await api("/api/admin/taxi/" + s.dataset.tst + "/status", "PUT", { status: s.value }); toast("Yangilandi"); }
+      catch (ex) { toast(ex.message, true); }
+    })
+  );
+}
+
+/* ---------- REYTING NAZORATI ---------- */
+async function loadRt() {
+  const d = await api("/api/admin/ratings");
+  $("#rtProd").innerHTML = d.products.length ? `
+    <div style="overflow-x:auto"><table>
+      <tr><th>#</th><th>Tovar</th><th>Reyting (tortilgan)</th><th>Baholar soni</th></tr>
+      ${d.products.map((p) => `
+        <tr>
+          <td>${p.id}</td>
+          <td>${p.emoji} ${p.name}</td>
+          <td>⭐ <b>${p.avg}</b></td>
+          <td>${p.count}</td>
+        </tr>`).join("")}
+    </table></div>` : `<p class="empty">Hali baho berilmagan</p>`;
+
+  $("#rtList").innerHTML = d.ratings.length ? `
+    <div style="overflow-x:auto"><table>
+      <tr><th>#</th><th>Tovar</th><th>Foydalanuvchi</th><th>Baho</th><th>Vaqt</th><th>Amal</th></tr>
+      ${d.ratings.map((r) => `
+        <tr>
+          <td>${r.id}</td>
+          <td>${r.emoji} ${r.product}</td>
+          <td>@${r.username}</td>
+          <td>${"★".repeat(r.stars)}${"☆".repeat(5 - r.stars)}</td>
+          <td>${r.updated_at}</td>
+          <td><button class="btn danger" data-rdel="${r.id}" style="padding:5px 8px;font-size:11px">O'chirish</button></td>
+        </tr>`).join("")}
+    </table></div>` : `<p class="empty">Baho yo'q</p>`;
+
+  $$("#rtList [data-rdel]").forEach((b) =>
+    b.addEventListener("click", async () => {
+      if (!confirm("Bu bahoni o'chirasizmi?")) return;
+      try { await api("/api/admin/ratings/" + b.dataset.rdel, "DELETE"); toast("Baho o'chirildi"); loadRt(); }
       catch (ex) { toast(ex.message, true); }
     })
   );

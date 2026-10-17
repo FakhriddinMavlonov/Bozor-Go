@@ -89,7 +89,9 @@ body { background: var(--bg); color: var(--text); min-height: 100vh; }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
 .prod { background: var(--card); border-radius: var(--radius); overflow: hidden; display: flex; flex-direction: column; transition: .15s; }
 .prod:hover { transform: translateY(-3px); box-shadow: 0 10px 24px rgba(0,0,0,.09); }
-.prod .img { height: 110px; display: grid; place-items: center; font-size: 52px; background: linear-gradient(135deg, #efe7ff, #fbeaff); }
+.prod .img { height: 110px; display: grid; place-items: center; font-size: 52px; background: linear-gradient(135deg, #efe7ff, #fbeaff); position: relative; }
+.prod .img .hot { position: absolute; top: 6px; left: 6px; font-size: 10px; font-weight: 800; color: #fff; background: linear-gradient(135deg, #ff5a5a, #ff8f3f); padding: 3px 7px; border-radius: 999px; letter-spacing: .3px; }
+.prod .sold { font-size: 11px; color: #ff7a18; font-weight: 700; }
 .prod .body { padding: 10px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
 .prod .name { font-size: 13px; font-weight: 600; line-height: 1.3; flex: 1; }
 .prod .price { color: var(--purple); font-weight: 800; font-size: 15px; }
@@ -209,6 +211,15 @@ input:focus { border-color: var(--purple); }
 }
 .toast.error { background: var(--red); }
 
+/* ===== REYTING ===== */
+.prod .rating { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: #f59e0b; }
+.prod .rating small { color: var(--muted); font-weight: 600; }
+.prod .rate-btn { border: none; background: #fff5e0; color: #b26a00; font-weight: 700; font-size: 11px; padding: 5px 8px; border-radius: 8px; cursor: pointer; }
+.rate-stars { display: flex; gap: 6px; justify-content: center; margin: 16px 0 8px; }
+.rate-stars button { border: none; background: none; font-size: 38px; line-height: 1; color: #ddd; cursor: pointer; transition: transform .1s; }
+.rate-stars button:hover { transform: scale(1.15); }
+.rate-stars button.on { color: #f59e0b; }
+.rate-info { text-align: center; font-size: 13px; color: var(--muted); }
 /* ===== KIRISH OLDI (GATE) ===== */
 .gate {
   position: fixed; inset: 0; z-index: 80; overflow-y: auto;

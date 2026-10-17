@@ -1,8 +1,11 @@
 const { DatabaseSync } = require("node:sqlite");
 const path = require("path");
 const crypto = require("crypto");
+const os = require("os");
 
-const db = new DatabaseSync(path.join(__dirname, "..", "data.db"));
+const dbPath = process.env.SQLITE_PATH ||
+  (process.env.VERCEL ? path.join(os.tmpdir(), "openbudget.db") : path.join(__dirname, "..", "data.db"));
+const db = new DatabaseSync(dbPath);
 
 db.exec(`
 PRAGMA journal_mode = WAL;

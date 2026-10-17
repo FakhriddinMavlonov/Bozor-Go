@@ -36,6 +36,28 @@ function admin(req, res, next) {
   next();
 }
 
+// ---------- REYTING (nazoratli, tortilgan o'rtacha) ----------
+// Og'irlik: 1 ball -> 0.5, 2 -> 1, 3 -> 1.5, 4 -> 2, 5 -> 2.5  (weight = ball / 2)
+// Reyting = Σ(ball × weight) / Σ(weight). Past ball kichik og'irlikka ega bo'lgani uchun
+// bitta odam 1 ball berib, o'rtachani birdan tushirib yubora olmaydi.
+function starWeight(stars) {
+  const s = Math.min(5, Math.max(1, Math.round(Number(stars) || 0)));
+  return s / 2;
+}
+function weightedRating(list) {
+  let sumSW = 0;
+  let sumW = 0;
+  for (const r of list) {
+    const w = starWeight(r.stars);
+    sumSW += r.stars * w;
+    sumW += w;
+  }
+  return {
+    avg: sumW ? Math.round((sumSW / sumW) * 100) / 100 : 0,
+    count: list.length,
+  };
+}
+
 // ---------- AUTH ----------
 app.post("/api/register", (req, res) => {
   const username = String(req.body.username || "").trim().toLowerCase();
@@ -130,7 +152,7 @@ app.get("/api/categories", (_req, res) =>
 app.get("/api/products", (req, res) => {
   const cat = Number(req.query.cat) || 0;
   const q = String(req.query.q || "").trim();
-  let rows = db.prepare("SELECT p.*, c.name AS category FROM products p JOIN categories c ON c.id=p.category_id WHERE p.active=1").all();
+  let rows = db.prepare("SELECT p.*, c.name AS category FROM products p JOIN categories c ON c.id=p.category_id WHERE p.active=1 ORDER BY p.sold_count DESC, p.id ASC").all();
   if (cat) rows = rows.filter((r) => r.category_id === cat);
   if (q) rows = rows.filter((r) => (r.name + " " + r.category).toLowerCase().includes(q.toLowerCase()));
   const stock = db.prepare(
@@ -138,14 +160,39 @@ app.get("/api/products", (req, res) => {
   );
   const smap = {};
   stock.all().forEach((r) => (smap[r.product_id] = r));
+  const ratingRows = db.prepare("SELECT product_id, user_id, stars FROM ratings").all();
+  const rmap = {};
+  ratingRows.forEach((r) => (rmap[r.product_id] = rmap[r.product_id] || []).push(r));
   res.json({
-    products: rows.map((p) => ({
-      ...p,
-      qty: smap[p.id] ? smap[p.id].qty : 0,
-      warehouses: smap[p.id] ? smap[p.id].whs : 0,
-      delivery: smap[p.id] && smap[p.id].cities ? deliveryRange(String(smap[p.id].cities).split(",")) : "3-5 kun",
-    })),
+    products: rows.map((p) => {
+      const mine = req.user ? ratingRows.find((r) => r.product_id === p.id && r.user_id === req.user.id) : null;
+      const wr = weightedRating(rmap[p.id] || []);
+      return {
+        ...p,
+        qty: smap[p.id] ? smap[p.id].qty : 0,
+        warehouses: smap[p.id] ? smap[p.id].whs : 0,
+        delivery: smap[p.id] && smap[p.id].cities ? deliveryRange(String(smap[p.id].cities).split(",")) : "3-5 kun",
+        rating_avg: wr.avg,
+        rating_count: wr.count,
+        my_rating: mine ? mine.stars : 0,
+      };
+    }),
   });
+});
+
+// Reyting berish / o'zgartirish (bir user bir tovarga bitta baho)
+app.post("/api/ratings", auth, (req, res) => {
+  const productId = Number(req.body.product_id) || 0;
+  const stars = Math.round(Number(req.body.stars));
+  if (!(stars >= 1 && stars <= 5)) return res.status(400).json({ error: "Baho 1 dan 5 gacha bo'lsin" });
+  const p = db.prepare("SELECT id FROM products WHERE id = ? AND active = 1").get(productId);
+  if (!p) return res.status(400).json({ error: "Tovar topilmadi" });
+  db.prepare(
+    `INSERT INTO ratings (product_id, user_id, stars, updated_at) VALUES (?, ?, ?, datetime('now'))
+     ON CONFLICT(product_id, user_id) DO UPDATE SET stars = excluded.stars, updated_at = datetime('now')`
+  ).run(productId, req.user.id, stars);
+  const wr = weightedRating(db.prepare("SELECT stars FROM ratings WHERE product_id = ?").all(productId));
+  res.json({ ok: true, product_id: productId, my_rating: stars, rating_avg: wr.avg, rating_count: wr.count });
 });
 
 app.get("/api/warehouses", (_req, res) =>
@@ -235,6 +282,9 @@ app.post("/api/orders", auth, (req, res) => {
       "INSERT INTO orders (user_id, type, items, address_id, address_text, total, status, warehouses, delivery) VALUES (?, ?, ?, ?, ?, ?, 'yangi', ?, ?)"
     )
     .run(req.user.id, "market", JSON.stringify(lines), addr.id, `${addr.title}: ${addr.text}`, total, JSON.stringify(usedWh), delivery);
+  // to'lov bo'ldi: sotilgan mahsulotlar yuqoriga chiqishi uchun hisobni oshiramiz
+  const bumpSold = db.prepare("UPDATE products SET sold_count = sold_count + ? WHERE id = ?");
+  for (const l of lines) bumpSold.run(l.qty, l.id);
   res.json({ ok: true, id: Number(info.lastInsertRowid), total, warehouses: usedWh, delivery });
 });
 
@@ -277,11 +327,14 @@ app.post("/api/orders/:id/cancel", auth, (req, res) => {
     return res.status(400).json({ error: "Bu buyurtmani endi bekor qilib bo'lmaydi" });
   if (o.type === "market") {
     const lines = JSON.parse(o.items);
-    for (const l of lines)
+    const dropSold = db.prepare("UPDATE products SET sold_count = MAX(0, sold_count - ?) WHERE id = ?");
+    for (const l of lines) {
       for (const a of l.from || [])
         db.prepare("UPDATE stocks SET qty = qty + ? WHERE product_id = ? AND warehouse_id = ?").run(
           a.qty, l.id, a.warehouse_id
         );
+      dropSold.run(Math.max(1, Number(l.qty) || 1), l.id);
+    }
   }
   db.prepare("UPDATE orders SET status = 'bekor qilindi' WHERE id = ?").run(o.id);
   res.json({ ok: true });
@@ -483,6 +536,27 @@ app.put("/api/admin/users/:id", admin, (req, res) => {
   const banned = req.body.banned !== undefined ? (req.body.banned ? 1 : 0) : u.banned;
   const is_admin = req.body.is_admin !== undefined ? (req.body.is_admin ? 1 : 0) : u.is_admin;
   db.prepare("UPDATE users SET banned = ?, is_admin = ? WHERE id = ?").run(banned, is_admin, u.id);
+  res.json({ ok: true });
+});
+
+// ---------- ADMIN: REYTING NAZORATI ----------
+app.get("/api/admin/ratings", admin, (_req, res) => {
+  const rows = db
+    .prepare(
+      `SELECT r.id, r.product_id, r.user_id, r.stars, r.updated_at, p.name AS product, p.emoji AS emoji, u.username
+       FROM ratings r JOIN products p ON p.id = r.product_id JOIN users u ON u.id = r.user_id
+       ORDER BY r.updated_at DESC, r.id DESC LIMIT 500`
+    )
+    .all();
+  const products = db.prepare("SELECT id, name, emoji FROM products ORDER BY name").all();
+  const grouped = products
+    .map((p) => ({ ...p, ...weightedRating(db.prepare("SELECT stars FROM ratings WHERE product_id = ?").all(p.id)) }))
+    .filter((p) => p.count > 0);
+  res.json({ ratings: rows, products: grouped });
+});
+
+app.delete("/api/admin/ratings/:id", admin, (req, res) => {
+  db.prepare("DELETE FROM ratings WHERE id = ?").run(Number(req.params.id));
   res.json({ ok: true });
 });
 

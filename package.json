@@ -7,9 +7,12 @@
   "scripts": {
     "start": "node server.js",
     "bot": "node bot-start.js",
-    "web": "node -e \"process.env.DISABLE_BOT='1';require('./server.js')\"",
+    "web": "node server.js --web",
     "apteka": "node apteka/server.js",
     "market": "node market/server.js"
+  },
+  "engines": {
+    "node": "22.x"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

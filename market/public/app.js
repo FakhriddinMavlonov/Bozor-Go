@@ -249,10 +249,15 @@ function renderProducts() {
   }
   $("#products").innerHTML = list.length ? list.map((p) => `
     <div class="prod">
-      <div class="img">${p.emoji}</div>
+      <div class="img">${p.emoji}${p.sold_count > 0 ? `<span class="hot">🔥 TOP</span>` : ""}</div>
       <div class="body">
         <div class="name">${p.name}</div>
+        <div class="rating">
+          ${p.rating_count ? `<span>⭐ ${p.rating_avg}</span><small>${p.rating_count} baho</small>` : `<small>Hali baholanmagan</small>`}
+          <button class="rate-btn" data-rate="${p.id}">${p.my_rating ? `Siz: ${p.my_rating}★` : "Baho berish"}</button>
+        </div>
         <div class="price">${fmt(p.price)}</div>
+        ${p.sold_count > 0 ? `<div class="sold">🔥 ${p.sold_count} marta sotilgan</div>` : ""}
         <div class="stock">${p.qty > 0 ? `✅ ${p.warehouses} ta omborda mavjud` : "❌ Omborda yo'q"}</div>
         ${p.qty > 0 ? `<div class="delivery">🚚 Yetkazish: <b>${p.delivery}</b></div>` : ""}
         <button class="btn primary" data-add="${p.id}" ${p.qty > 0 ? "" : "disabled"}>Savatga</button>
@@ -261,7 +266,47 @@ function renderProducts() {
   $$("#products [data-add]").forEach((b) =>
     b.addEventListener("click", () => addToCart("market", Number(b.dataset.add)))
   );
+  $$("#products [data-rate]").forEach((b) =>
+    b.addEventListener("click", () => openRate(Number(b.dataset.rate)))
+  );
 }
+
+/* ================= REYTING ================= */
+let rateProductId = 0;
+let ratePick = 0;
+
+function openRate(id) {
+  if (!state.user) { openAuth("login"); return; }
+  const p = state.products.find((x) => x.id === id);
+  if (!p) return;
+  rateProductId = id;
+  ratePick = p.my_rating || 0;
+  $("#rateName").textContent = `${p.emoji} ${p.name}`;
+  $("#rateInfo").textContent = p.rating_count
+    ? `Joriy reyting: ⭐ ${p.rating_avg} (${p.rating_count} baho)`
+    : "Bu tovar hali baholanmagan — birinchi bo'lib baholang!";
+  renderRateStars();
+  openModal("#rateModal");
+}
+function renderRateStars() {
+  $$("#rateStars button").forEach((b) => b.classList.toggle("on", Number(b.dataset.star) <= ratePick));
+}
+$$("#rateStars button").forEach((b) =>
+  b.addEventListener("click", () => { ratePick = Number(b.dataset.star); renderRateStars(); })
+);
+$("#rateSubmit").addEventListener("click", async () => {
+  if (!ratePick) return toast("Avval yulduzcha tanlang", true);
+  try {
+    const d = await api("/api/ratings", "POST", { product_id: rateProductId, stars: ratePick });
+    const p = state.products.find((x) => x.id === rateProductId);
+    if (p) { p.rating_avg = d.rating_avg; p.rating_count = d.rating_count; p.my_rating = d.my_rating; }
+    renderProducts();
+    closeModals();
+    toast("Rahmat! Bahoingiz saqlandi");
+  } catch (ex) {
+    toast(ex.message, true);
+  }
+});
 $("#search").addEventListener("input", (e) => { state.q = e.target.value.trim(); renderProducts(); });
 
 function addToCart(kind, id) {

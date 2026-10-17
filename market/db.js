@@ -31,7 +31,8 @@ CREATE TABLE IF NOT EXISTS products (
   name TEXT NOT NULL,
   price INTEGER NOT NULL,
   emoji TEXT NOT NULL DEFAULT '📦',
-  active INTEGER NOT NULL DEFAULT 1
+  active INTEGER NOT NULL DEFAULT 1,
+  sold_count INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS stocks (
   product_id INTEGER NOT NULL,
@@ -86,6 +87,14 @@ CREATE TABLE IF NOT EXISTS taxi_orders (
   driver TEXT NOT NULL DEFAULT '',
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+CREATE TABLE IF NOT EXISTS ratings (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  product_id INTEGER NOT NULL,
+  user_id INTEGER NOT NULL,
+  stars INTEGER NOT NULL,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(product_id, user_id)
+);
 `);
 
 const ORDER_STATUS = ["yangi", "tasdiqlandi", "yetkazilmoqda", "yetkazildi", "bekor qilindi"];
@@ -98,6 +107,21 @@ const userCols = db.prepare("PRAGMA table_info(users)").all().map((c) => c.name)
 if (!userCols.includes("google_email")) db.exec("ALTER TABLE users ADD COLUMN google_email TEXT");
 if (!userCols.includes("google_name")) db.exec("ALTER TABLE users ADD COLUMN google_name TEXT");
 if (!userCols.includes("banned")) db.exec("ALTER TABLE users ADD COLUMN banned INTEGER NOT NULL DEFAULT 0");
+
+const productCols = db.prepare("PRAGMA table_info(products)").all().map((c) => c.name);
+if (!productCols.includes("sold_count")) {
+  db.exec("ALTER TABLE products ADD COLUMN sold_count INTEGER NOT NULL DEFAULT 0");
+  // eski buyurtmalardan sotilganlar sonini qayta hisoblash
+  const oldOrders = db
+    .prepare("SELECT items FROM orders WHERE type = 'market' AND status != 'bekor qilindi'")
+    .all();
+  const upd = db.prepare("UPDATE products SET sold_count = sold_count + ? WHERE id = ?");
+  for (const o of oldOrders) {
+    try {
+      for (const l of JSON.parse(o.items) || []) upd.run(Math.max(1, Number(l.qty) || 1), Number(l.id));
+    } catch {}
+  }
+}
 
 const CITY_DAYS = { Toshkent: [1, 2], Samarqand: [2, 3], Buxoro: [3, 4] };
 

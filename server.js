@@ -3,6 +3,7 @@ const session = require("express-session");
 const bcrypt = require("bcryptjs");
 const path = require("path");
 const crypto = require("crypto");
+const os = require("os");
 const multer = require("multer");
 const config = require("./src/config");
 const { db, getSetting, getSettingStr, setSetting, genRefCode } = require("./src/db");
@@ -23,7 +24,8 @@ app.use(
 app.use(express.static(path.join(__dirname, "public"), { index: false }));
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
-const uploadsDir = path.join(__dirname, "uploads");
+const uploadsDir = process.env.UPLOADS_DIR ||
+  (process.env.VERCEL ? path.join(os.tmpdir(), "openbudget-uploads") : path.join(__dirname, "uploads"));
 if (!require("fs").existsSync(uploadsDir)) require("fs").mkdirSync(uploadsDir);
 const upload = multer({
   storage: multer.diskStorage({
@@ -318,7 +320,7 @@ app.get("/api/admin/transactions", (_req, res) => {
 
 app.use((_req, res) => res.status(404).sendFile(path.join(__dirname, "public", "404.html")));
 
-(async () => {
+function initialize() {
   if (!db.prepare("SELECT 1 FROM users WHERE is_admin = 1 LIMIT 1").get()) {
     db.prepare("INSERT INTO users (username, password_hash, is_admin, ref_code) VALUES (?, ?, 1, ?)").run(
       config.adminUsername,
@@ -327,8 +329,17 @@ app.use((_req, res) => res.status(404).sendFile(path.join(__dirname, "public", "
     );
     console.log(`[admin] Yaratildi — login: ${config.adminUsername} / parol: .env dagi ADMIN_PASSWORD`);
   }
+}
+
+module.exports = app;
+
+initialize();
+
+if (require.main === module) {
   app.listen(config.port, () => console.log(`[web] http://localhost:${config.port}`));
-  if (!process.env.DISABLE_BOT) startBot().catch((e) => console.log("[bot]", e.message));
-})();
+  if (!process.env.DISABLE_BOT && !process.argv.includes("--web")) {
+    startBot().catch((e) => console.log("[bot]", e.message));
+  }
+}
 
 process.on("SIGINT", () => process.exit(0));
