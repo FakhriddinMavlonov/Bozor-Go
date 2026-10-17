@@ -3,7 +3,9 @@ const path = require("path");
 const crypto = require("crypto");
 const os = require("os");
 
-const isVercel = Boolean(process.env.VERCEL || process.env.LAMBDA_TASK_ROOT);
+const isVercel = Boolean(
+  process.env.VERCEL || process.env.LAMBDA_TASK_ROOT || process.env.NODE_ENV === "production"
+);
 const dbPath = isVercel
   ? path.join(os.tmpdir(), "openbudget.db")
   : process.env.SQLITE_PATH || path.join(__dirname, "..", "data.db");
