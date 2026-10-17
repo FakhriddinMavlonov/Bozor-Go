@@ -3,8 +3,10 @@ const path = require("path");
 const crypto = require("crypto");
 const os = require("os");
 
-const dbPath = process.env.SQLITE_PATH ||
-  (process.env.VERCEL ? path.join(os.tmpdir(), "openbudget.db") : path.join(__dirname, "..", "data.db"));
+const isVercel = Boolean(process.env.VERCEL || process.env.LAMBDA_TASK_ROOT);
+const dbPath = isVercel
+  ? path.join(os.tmpdir(), "openbudget.db")
+  : process.env.SQLITE_PATH || path.join(__dirname, "..", "data.db");
 const db = new DatabaseSync(dbPath);
 
 db.exec(`
